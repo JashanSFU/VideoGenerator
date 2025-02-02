@@ -1,0 +1,52 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.venv/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Cache files
+cache/
+*.cache
+*.log
+
+# Secrets and API keys
+secrets_*.py
+secrets.json
+*.pem
+*.key
+
+# MoviePy generated files
+final_video.mp4
+voiceover.mp3
+background.mp4
+resized_background.mp4
+
+# Results directory
+results/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings
+.vscode/
+*.code-workspace
+
+# MacOS system files
+.DS_Store
+
+# Windows system files
+desktop.ini
