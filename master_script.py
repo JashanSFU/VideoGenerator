@@ -73,6 +73,6 @@ else:
 
 # Step 5: Create final video
 print("🎬 Creating final video...")
-create_video(video_path, VOICEOVER_FILE, FINAL_VIDEO, title="Reddit Story")
+create_video(video_path, VOICEOVER_FILE, FINAL_VIDEO, title="Reddit Story", story_text=formatted_story)
 
 print("✅ Video creation complete:", FINAL_VIDEO)
