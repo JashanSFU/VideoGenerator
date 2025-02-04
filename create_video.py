@@ -3,20 +3,22 @@ import os
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 from moviepy.video.fx.loop import loop
-from moviepy.editor import TextClip, CompositeVideoClip
+from moviepy.editor import TextClip, CompositeVideoClip, concatenate_videoclips
+from moviepy.video.fx.all import fadein, fadeout  # ✅ Corrected import
 from tqdm import tqdm
 import re
 
-
 RESULTS_DIR = "results"
 
+def ensure_dir(directory):
+    """ Ensure that a directory exists """
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+ensure_dir(RESULTS_DIR)
+
 def split_text_with_voice_timing(text, audio_duration, words_per_second=2.5, gap_between_subtitles=0.2):
-    """
-    Splits text into naturally timed phrases based on estimated speech speed.
-    - Uses punctuation (.,!?) to create natural breaks.
-    - Ensures subtitles stay visible while AI voice is speaking.
-    - Adds a small delay between subtitles to avoid overlap.
-    """
+    """ Splits text into phrases based on speech speed and punctuation, ensuring a minimum duration """
     words = text.split()
     phrases = []
     temp_phrase = []
@@ -24,30 +26,22 @@ def split_text_with_voice_timing(text, audio_duration, words_per_second=2.5, gap
 
     for word in words:
         temp_phrase.append(word)
-        if re.search(r"[.!?]", word) or len(temp_phrase) >= 10:  # Break at punctuation or after ~10 words
+        if re.search(r"[.!?]", word) or len(temp_phrase) >= 10:  
             phrase_text = " ".join(temp_phrase)
-            phrase_duration = len(temp_phrase) / words_per_second  # Estimate duration
+            phrase_duration = max(len(temp_phrase) / words_per_second, 1.0)  # 🔥 Ensures min duration of 1 sec
             phrases.append((current_time, phrase_text, phrase_duration))
-            current_time += phrase_duration + gap_between_subtitles  # Add buffer to prevent overlap
+            current_time += phrase_duration + gap_between_subtitles  
             temp_phrase = []
 
-    if temp_phrase:  # Add last phrase
+    if temp_phrase:  
         phrase_text = " ".join(temp_phrase)
-        phrase_duration = len(temp_phrase) / words_per_second
+        phrase_duration = max(len(temp_phrase) / words_per_second, 1.0)
         phrases.append((current_time, phrase_text, phrase_duration))
 
     return phrases
 
-
-def ensure_dir(directory):
-    """ Ensure that a directory exists """
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
 def resize_video(input_file, output_file=None, height=720):
-    """ Resizes a video using FFmpeg, ensuring width is even. """
-    ensure_dir(RESULTS_DIR)
-
+    """ Resizes a video using FFmpeg, ensuring width is even """
     if output_file is None:
         output_file = os.path.join(RESULTS_DIR, "resized_background.mp4")
 
@@ -65,23 +59,23 @@ def resize_video(input_file, output_file=None, height=720):
         output_file
     ]
 
-    process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     if os.path.exists(output_file) and os.path.getsize(output_file) > 1000:
         print(f"✅ Resized video saved as {output_file}")
         return output_file
     else:
-        print(f"⚠ Resizing failed: {process.stderr.decode()}")
+        print(f"⚠ Resizing failed.")
         return input_file
 
 def create_video(background, audio, output_file=None, title="Reddit Story", story_text=""):
-    """ Combines resized video with AI-generated voiceover and adds properly timed subtitles. """
+    """ Combines resized video with AI-generated voiceover and adds animated subtitles """
     ensure_dir(RESULTS_DIR)
 
     if output_file is None:
-        output_file = os.path.join(RESULTS_DIR, "final_video.mp4")
+        output_file = os.path.join(RESULTS_DIR, "final_moviepy_video.mp4")
 
-    print("🎬 Combining video and audio...")
+    print("🎬 Combining video and audio with animated subtitles...")
 
     if not story_text:
         print("⚠ No captions provided!")
@@ -102,41 +96,44 @@ def create_video(background, audio, output_file=None, title="Reddit Story", stor
         # Ensure video matches audio duration
         if video_clip.duration < audio_clip.duration:
             print("🔄 Looping video to match voiceover duration...")
-            video_clip = loop(video_clip, duration=audio_clip.duration)
+            video_clip = video_clip.loop(duration=audio_clip.duration)
         else:
             video_clip = video_clip.subclip(0, audio_clip.duration)
 
         video_clip = video_clip.set_audio(audio_clip)
 
-        # Generate subtitles using AI voice timing
-        subtitles = split_text_with_voice_timing(story_text, audio_clip.duration)
-
-        # ** Title (Appears at top) **
+        # Generate animated title
         title_clip = TextClip(
             title,
-            fontsize=55,
+            fontsize=70,
             color="white",
             font="Arial-Bold",
             stroke_color="black",
-            stroke_width=3,
+            stroke_width=4,
             method="label",
             size=(video_clip.w - 200, None)
-        ).set_position(("center", 50)).set_duration(audio_clip.duration)
+        ).set_position(("center", 50)).set_duration(3)
 
-        # ** Subtitles (Stay visible until AI finishes speaking) **
+        title_clip = fadein(title_clip, 1).set_duration(4)
+
+        # Generate animated subtitles
+        subtitles = split_text_with_voice_timing(story_text, audio_clip.duration)
         subtitle_clips = [title_clip]
 
         for start_time, text, duration in subtitles:
             subtitle_text = TextClip(
                 text,
-                fontsize=45,
+                fontsize=50,
                 color='yellow',
                 font="Arial-Bold",
                 stroke_color="black",
-                stroke_width=2,
+                stroke_width=3,
                 method="caption",
-                size=(video_clip.w - 200, None)  
-            ).set_position(("center", video_clip.h - 250)).set_start(start_time).set_duration(duration)  # No overlap now!
+                size=(video_clip.w - 200, None)
+            ).set_position(("center", video_clip.h - 200)).set_start(start_time).set_duration(duration)
+
+            subtitle_text = fadein(subtitle_text, 0.5)  # Smooth fade-in effect
+            subtitle_text = fadeout(subtitle_text, 0.5)  # Smooth fade-out effect
 
             subtitle_clips.append(subtitle_text)
 
@@ -155,6 +152,10 @@ def create_video(background, audio, output_file=None, title="Reddit Story", stor
 
     except Exception as e:
         print(f"❌ Error creating video: {e}")
+
+
+
+
 
 # import subprocess
 # import os
